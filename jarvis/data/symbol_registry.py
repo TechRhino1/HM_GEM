@@ -30,7 +30,7 @@ _REGISTRY: Dict[str, SymbolSpec] = {
     "XAUUSD": SymbolSpec(
         canonical="XAUUSD", asset_class="COMMODITY",
         contract_size=100.0, pip_size=0.1, pip_value_per_lot=10.0,
-        typical_spread_pips=2.0, max_spread_pips=5.0,
+        typical_spread_pips=2.5, max_spread_pips=6.0,
         typical_atr_pct=0.8, margin_pct=0.1, digits=2
     ),
     "EURUSD": SymbolSpec(
@@ -151,7 +151,7 @@ _REGISTRY: Dict[str, SymbolSpec] = {
 
 # ─── Broker Alias Resolution ─────────────────────────────────────────────────
 _ALIAS_MAP: Dict[str, str] = {
-    "GOLD.I#": "XAUUSD", "GOLD": "XAUUSD", "GOLD.I": "XAUUSD", "XAUUSD#": "XAUUSD", "XAUUSD.I#": "XAUUSD", "XAUUSD.I": "XAUUSD",
+    "GOLD#": "XAUUSD", "GOLD.I#": "XAUUSD", "GOLD": "XAUUSD", "GOLD.I": "XAUUSD", "GOLD24-7.I#": "XAUUSD", "GOLD24-7#": "XAUUSD", "XAUUSD#": "XAUUSD", "XAUUSD.I#": "XAUUSD", "XAUUSD.I": "XAUUSD",
     "EURUSD#": "EURUSD", "EURUSD.I#": "EURUSD", "EURUSD.I": "EURUSD",
     "GBPUSD#": "GBPUSD", "GBPUSD.I#": "GBPUSD", "GBPUSD.I": "GBPUSD",
     "USDJPY#": "USDJPY", "USDJPY.I#": "USDJPY", "USDJPY.I": "USDJPY",

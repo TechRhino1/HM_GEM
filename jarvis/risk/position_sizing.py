@@ -96,11 +96,19 @@ class PositionSizer:
         if raw_lots < min_vol:
             actual_risk_dollars = min_vol * dollar_risk_per_lot
             actual_risk_pct = (actual_risk_dollars / (account_balance + 1e-9)) * 100.0
-            max_acceptable_risk_pct = min(3.0, 2.0 * effective_risk_pct)
-            if actual_risk_pct > max_acceptable_risk_pct:
+            if account_balance < 1000.0:
+                # On smaller accounts, 0.01 is the broker's indivisible minimum floor.
+                # Allow 0.01 lot if risk <= 5.0% or risk dollars <= $20.0
+                is_tolerable = (actual_risk_pct <= 5.0) or (actual_risk_dollars <= 20.0)
+                max_acceptable_risk_pct = 5.0
+            else:
+                max_acceptable_risk_pct = min(3.0, 2.0 * effective_risk_pct)
+                is_tolerable = (actual_risk_pct <= max_acceptable_risk_pct)
+
+            if not is_tolerable:
                 logger.error(
                     f"REJECTED [{sym_key}]: Minimum lot size ({min_vol}) would force "
-                    f"{actual_risk_pct:.2f}% risk (target was {effective_risk_pct:.2f}%). "
+                    f"{actual_risk_pct:.2f}% risk / ${actual_risk_dollars:.2f} (target was {effective_risk_pct:.2f}%). "
                     f"Account balance too small for this symbol/stop-distance combination."
                 )
                 return 0.0

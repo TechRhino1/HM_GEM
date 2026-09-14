@@ -117,6 +117,15 @@ class DrawdownGuard:
         if changed and self.db_path:
             self._save_state()
 
+    def reset_daily_loss(self, current_equity: float):
+        """Explicitly re-anchors the daily start equity to current equity."""
+        if current_equity > 0:
+            self.daily_start_equity = float(current_equity)
+            if self.peak_equity < self.daily_start_equity or self.peak_equity > self.daily_start_equity * 1.5:
+                self.peak_equity = self.daily_start_equity
+            if self.db_path:
+                self._save_state()
+
     def get_risk_multiplier(self, current_equity: float) -> float:
         if self.peak_equity <= 0:
             return 1.0

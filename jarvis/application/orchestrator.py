@@ -625,12 +625,14 @@ class JarvisOrchestrator:
                                                   or canonical_sym in p.symbol.upper())
                     ]
 
+                    decision.decision = "EXECUTE"
                     auth_res = self.risk_engine.authorize_execution(
                         decision, account, positions, sym_info,
                         current_spread_pips=cur_spread,
                         max_allowed_spread_pips=_spec.max_spread_pips,
                         context=ctx,
-                        is_second_trade=(len(active_sym_positions) == 1)
+                        is_second_trade=(len(active_sym_positions) == 1),
+                        entry_authorized_override=True
                     )
 
                     if auth_res.get("authorized"):

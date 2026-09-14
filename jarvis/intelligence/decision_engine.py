@@ -1049,7 +1049,8 @@ class DecisionEngine:
         if gate_passed:
             gate_policy_decision = "PASS"
         else:
-            _gp_decision, _gp_gates = self.gate_policy.decide(failing_reasons, recent_win_rate=None)
+            _rec_wr = pattern_memory.get("win_rate") if (pattern_memory and pattern_memory.get("sample_size", 0) >= 3) else calibrated_win_p
+            _gp_decision, _gp_gates = self.gate_policy.decide(failing_reasons, recent_win_rate=_rec_wr)
             if _gp_decision == "SOFTEN":
                 gate_policy_decision = "SOFTEN"
                 softened_gates = _gp_gates
