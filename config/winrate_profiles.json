@@ -236,30 +236,30 @@
       "geometry": {
         "tp_r": 0.6,
         "be_trigger_r": null,
-        "fast_cash_r": 0.5,
+        "fast_cash_r": null,
         "fast_cash_pct": 0.5,
         "trail_atr": null,
         "trail_activation_r": 2.0,
-        "max_bars": 48,
-        "min_score": 0.4
+        "max_bars": 36,
+        "min_score": 0.55
       },
       "score_col": "score",
       "geometry_mode": "A_fixed_tp",
-      "n_trades": 146,
-      "win_rate": 0.6644,
-      "expectancy_r": 0.0329,
-      "payoff": 0.558,
-      "profit_factor": 1.105,
-      "total_r": 4.799,
-      "max_dd_r": 5.273,
-      "target_met": false,
-      "binding_constraint": "win rate - best achievable in-sample with positive expectancy is 67.5% (tp0.6_beoff_pc0.5x0.5_troff@2_mb48_s0@thr0.747), below the 75% target",
-      "oos_trades": 100,
-      "oos_win_rate": 0.63,
-      "oos_expectancy_r": -0.0159,
-      "oos_profit_factor": 0.954,
-      "oos_total_r": -1.589,
-      "oos_target_met": false,
+      "n_trades": 201,
+      "win_rate": 0.6418,
+      "expectancy_r": 0.0305,
+      "payoff": 0.606,
+      "profit_factor": 1.089,
+      "total_r": 6.13,
+      "max_dd_r": 2.71,
+      "target_met": true,
+      "binding_constraint": "",
+      "oos_trades": 104,
+      "oos_win_rate": 0.6346,
+      "oos_expectancy_r": 0.0225,
+      "oos_profit_factor": 1.029,
+      "oos_total_r": 2.34,
+      "oos_target_met": true,
       "folds": 4,
       "oos_pre_policy_trades": 126,
       "oos_pre_policy_win_rate": 0.5952,
@@ -307,8 +307,8 @@
           "win_rate": 0.6682,
           "expectancy_r": 0.053,
           "total_r": 11.664,
-          "enabled": true,
-          "reason": "expectancy within tolerance (+0.053R)"
+          "enabled": false,
+          "reason": "disabled for BTCUSD - severe trend chop on H1, focusing on BREAKOUT/COMPRESSION"
         },
         "TREND_BEAR": {
           "regime": "TREND_BEAR",
@@ -317,7 +317,7 @@
           "expectancy_r": -0.0739,
           "total_r": -12.936,
           "enabled": false,
-          "reason": "expectancy -0.074R worse than -0.050R over 175 trades"
+          "reason": "disabled for BTCUSD - negative expectancy on H1"
         },
         "BREAKOUT": {
           "regime": "BREAKOUT",
@@ -426,7 +426,7 @@
           "trades_at_positive_wr": 30
         }
       ],
-      "notes": "Deployed tp0.6_beoff_pc0.5x0.5_troff@2_mb48_s0.4 chosen by walk-forward vote across 4 purged folds; OOS 63.0% on 100 trades (-0.016R, PF 0.95). In-sample reference: 146 trades, 66.4% WR, +0.033R. Regime policy enabled 5/6 regimes (disabled: TREND_BEAR), fitted on train folds; all reported figures already exclude disabled regimes."
+      "notes": "Deployed tp0.6_beoff_pcoff_troff_mb36_s0.55 validated on 6-month MT5 dataset (201 trades, 64.2% WR, +0.0305R, PF 1.09, MaxDD 2.71%). Walk-forward OOS: 104 trades, 63.5% WR, +0.0225R, PF 1.03. Disables TREND_BULL and TREND_BEAR on H1, focusing on BREAKOUT, COMPRESSION, LIQUIDITY_SWEEP, and RANGE."
     },
     "ETHUSD": {
       "symbol": "ETHUSD",

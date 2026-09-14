@@ -1,7 +1,7 @@
 # BTCUSD# — 6-Month Backtest and Trade-Failure Analysis
 
 **Instrument:** BTCUSD# (canonical `BTCUSD`), CRYPTO, broker `XMGlobal-MT5 5`
-**Window:** 2026-03-13 14:00:00+00:00 → 2026-09-12 13:00:00+00:00  (183 days, 4392 H1 bars)
+**Window:** 2026-03-14 07:00:00+00:00 → 2026-09-13 06:00:00+00:00  (183 days, 4392 H1 bars)
 **Data:** MT5_TERMINAL_REAL — real MT5 history, structural validation passed
 **Configuration:** uncalibrated baseline (legacy 29-gate stack)  
 **Account:** $10,000, 0.5% risk per trade, median spread 2250.0 pips, slippage 0.5 pips
@@ -10,30 +10,30 @@
 
 | Metric | Value |
 |---|---:|
-| Trades | 80 |
-| Wins / Losses | 37 / 43 |
-| Win rate | 46.25% |
-| Expectancy | -0.0668 R per trade |
-| Total R | -5.34 R |
-| Average win / loss | +0.986 R / -0.972 R |
-| Payoff ratio | 1.014 |
-| Profit factor | 0.820 |
-| Net profit | $-216.67 |
-| Max drawdown | 3.40% |
-| Average bars held | 35.2 |
+| Trades | 89 |
+| Wins / Losses | 27 / 62 |
+| Win rate | 30.34% |
+| Expectancy | -0.2031 R per trade |
+| Total R | -18.07 R |
+| Average win / loss | +1.627 R / -1.000 R |
+| Payoff ratio | 1.627 |
+| Profit factor | 0.750 |
+| Net profit | $-402.45 |
+| Max drawdown | 5.73% |
+| Average bars held | 18.1 |
 
-**Verdict.** Losing system: -0.0668 R per trade over 80 trades. The losses are analysed below.
+**Verdict.** Losing system: -0.2031 R per trade over 89 trades. The losses are analysed below.
 
 ### The calibrated edge test on this window
 
 | Stage | Trades | Win rate | Expectancy (R) |
 |---|---:|---:|---:|
-| In-sample (training folds) | 255 | 76.5% | +0.0203 |
-| Purged out-of-sample | 295 | 77.0% | -0.0080 |
+| In-sample (training folds) | 146 | 66.4% | +0.0329 |
+| Purged out-of-sample | 100 | 63.0% | -0.0159 |
 
-**The calibrated system refuses to trade this symbol.** Its out-of-sample expectancy is non-positive (-0.0080 R over 295 trades) despite a positive in-sample figure (+0.0203 R) — i.e. the edge did not survive the walk-forward split. The entry policy declines the symbol rather than trading it at a smaller size, so the engine takes **zero** trades when the calibrated profile is active.
+**The calibrated system refuses to trade this symbol.** Its out-of-sample expectancy is non-positive (-0.0159 R over 100 trades) despite a positive in-sample figure (+0.0329 R) — i.e. the edge did not survive the walk-forward split. The entry policy declines the symbol rather than trading it at a smaller size, so the engine takes **zero** trades when the calibrated profile is active.
 
-> out-of-sample - met in-sample (76.5%) but not on purged folds; OOS expectancy is non-positive (-0.008R)
+> win rate - best achievable in-sample with positive expectancy is 67.5% (tp0.6_beoff_pc0.5x0.5_troff@2_mb48_s0@thr0.747), below the 75% target
 
 This is the single most important result on this page: the strategy *as configured by the legacy gates* does trade, and those trades are analysed below — but the calibrated configuration judges the symbol unprofitable and stands aside. The two are not in conflict; the second is what the evidence says about the first.
 
@@ -41,46 +41,38 @@ This is the single most important result on this page: the strategy *as configur
 
 | Exit | Count | Share | Avg R | Total R | Win rate |
 |---|---:|---:|---:|---:|---:|
-| STOP | 41 | 51.2% | -1.000 | -41.00 | 0.0% |
-| TRAIL_OR_BE | 33 | 41.2% | +0.677 | +22.36 | 100.0% |
-| TARGET | 4 | 5.0% | +3.529 | +14.12 | 100.0% |
-| END_OF_TEST | 1 | 1.2% | -0.087 | -0.09 | 0.0% |
-| TIME_STOP | 1 | 1.2% | -0.726 | -0.73 | 0.0% |
+| STOP | 80 | 89.9% | -0.501 | -40.07 | 22.5% |
+| TARGET | 9 | 10.1% | +2.444 | +22.00 | 100.0% |
 
 ## 3. Why the losing trades lost
 
-Of 43 losing trades, every one is attributed to a primary cause by explicit measurable rules (no discretion). A trade can trip several conditions; the table counts *primary* cause and lists all contributing flags separately.
+Of 62 losing trades, every one is attributed to a primary cause by explicit measurable rules (no discretion). A trade can trip several conditions; the table counts *primary* cause and lists all contributing flags separately.
 
 | Primary cause | Trades | Share of losses | Total R lost | Avg R |
 |---|---:|---:|---:|---:|
-| GAVE_BACK_FAVOURABLE_MOVE | 14 | 32.6% | -14.00 | -1.000 |
-| STOPPED_AFTER_MINOR_PROGRESS | 13 | 30.2% | -13.00 | -1.000 |
-| IMMEDIATE_ADVERSE_MOVE | 12 | 27.9% | -12.00 | -1.000 |
-| STOPPED_WITHOUT_PROGRESS | 2 | 4.7% | -2.00 | -1.000 |
-| TIME_STOP_NO_PROGRESS | 1 | 2.3% | -0.73 | -0.726 |
-| UNCLASSIFIED | 1 | 2.3% | -0.09 | -0.087 |
+| GAVE_BACK_FAVOURABLE_MOVE | 35 | 56.5% | -35.00 | -1.000 |
+| IMMEDIATE_ADVERSE_MOVE | 14 | 22.6% | -14.00 | -1.000 |
+| STOPPED_AFTER_MINOR_PROGRESS | 10 | 16.1% | -10.00 | -1.000 |
+| STOPPED_WITHOUT_PROGRESS | 3 | 4.8% | -3.00 | -1.000 |
 
 - **GAVE_BACK_FAVOURABLE_MOVE** — Gave back a favourable move: the trade ran into profit, then reversed all the way to the stop. Exit management, not entry selection.
-- **STOPPED_AFTER_MINOR_PROGRESS** — Stopped out after a small favourable move that fell short of the target.
 - **IMMEDIATE_ADVERSE_MOVE** — Entry timing: price moved straight against the position and never recovered. The entry was taken into immediate adverse flow.
+- **STOPPED_AFTER_MINOR_PROGRESS** — Stopped out after a small favourable move that fell short of the target.
 - **STOPPED_WITHOUT_PROGRESS** — Stopped out with essentially no favourable excursion — the entry had no immediate follow-through.
-- **TIME_STOP_NO_PROGRESS** — Time stop: price never travelled far enough within the bar budget. The target was outside what the holding period could realistically deliver.
-- **UNCLASSIFIED** — Did not match a specific failure pattern.
 
 ### Contributing conditions across all losses
 
 | Condition | Losses where it fired | Share |
 |---|---:|---:|
-| STOPPED_WITHOUT_PROGRESS | 14 | 32.6% |
-| ENTRY_AT_RANGE_EXTREME | 14 | 32.6% |
-| GAVE_BACK_FAVOURABLE_MOVE | 14 | 32.6% |
-| STOPPED_AFTER_MINOR_PROGRESS | 13 | 30.2% |
-| IMMEDIATE_ADVERSE_MOVE | 12 | 27.9% |
-| VOLATILITY_EXPANDING_AT_ENTRY | 10 | 23.3% |
-| HIGH_VOLATILITY_REGIME | 7 | 16.3% |
-| COUNTER_TREND_ENTRY | 7 | 16.3% |
-| STOP_WIDER_THAN_3_ATR | 4 | 9.3% |
-| TIME_STOP_NO_PROGRESS | 1 | 2.3% |
+| GAVE_BACK_FAVOURABLE_MOVE | 35 | 56.5% |
+| ENTRY_AT_RANGE_EXTREME | 26 | 41.9% |
+| STOPPED_WITHOUT_PROGRESS | 17 | 27.4% |
+| IMMEDIATE_ADVERSE_MOVE | 14 | 22.6% |
+| HIGH_VOLATILITY_REGIME | 11 | 17.7% |
+| VOLATILITY_EXPANDING_AT_ENTRY | 11 | 17.7% |
+| STOPPED_AFTER_MINOR_PROGRESS | 10 | 16.1% |
+| COUNTER_TREND_ENTRY | 5 | 8.1% |
+| TARGET_NEARLY_REACHED | 2 | 3.2% |
 
 ## 4. Trade-by-trade failure ledger
 
@@ -88,49 +80,68 @@ Every losing trade with the evidence that produced its label. `MFE` is the best 
 
 | # | Entry time | Side | Entry | Stop | R | MFE (R) | MAE (R) | Bars | Exit | stop/ATR | range pos | counter-trend | Primary cause |
 |---:|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|:--:|---|
-| 1 | 2026-03-20 11:00 | BUY | 71048.7 | 69729.8 | -1.00 | 0.00 | 1.12 | 6 | STOP | 2.44 | 0.69 | no | IMMEDIATE_ADVERSE_MOVE |
-| 2 | 2026-03-23 04:00 | SELL | 67900.0 | 69325.0 | -1.00 | 0.28 | 2.51 | 10 | STOP | 2.88 | 0.43 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 3 | 2026-03-23 16:00 | BUY | 71500.1 | 69175.9 | -1.00 | 0.13 | 1.12 | 28 | STOP | 3.04 | 0.92 | no | IMMEDIATE_ADVERSE_MOVE |
-| 4 | 2026-03-25 14:00 | BUY | 71695.5 | 70882.0 | -1.00 | 0.32 | 1.40 | 4 | STOP | 1.59 | 0.90 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 5 | 2026-03-30 04:00 | SELL | 66265.4 | 67476.5 | -1.00 | 0.00 | 1.13 | 4 | STOP | 2.58 | 0.78 | yes | IMMEDIATE_ADVERSE_MOVE |
-| 6 | 2026-03-30 12:00 | BUY | 67680.4 | 66570.5 | -1.00 | 0.44 | 1.06 | 10 | STOP | 2.54 | 0.85 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 7 | 2026-04-01 11:00 | BUY | 68696.2 | 67203.3 | -1.00 | 0.31 | 1.12 | 18 | STOP | 2.62 | 0.80 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 8 | 2026-04-06 09:00 | BUY | 69207.0 | 68189.8 | -1.00 | 1.12 | 1.13 | 30 | STOP | 2.82 | 0.79 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 9 | 2026-04-07 19:00 | SELL | 68153.1 | 69348.1 | -1.00 | 0.07 | 1.15 | 5 | STOP | 2.71 | 0.23 | no | IMMEDIATE_ADVERSE_MOVE |
-| 10 | 2026-04-12 06:00 | SELL | 71744.2 | 73036.0 | -1.00 | 0.96 | 1.34 | 41 | STOP | 2.92 | 0.12 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 11 | 2026-04-16 18:00 | SELL | 73956.8 | 75254.3 | -1.00 | 0.05 | 1.11 | 5 | STOP | 2.38 | 0.65 | yes | IMMEDIATE_ADVERSE_MOVE |
-| 12 | 2026-04-20 01:00 | SELL | 74410.5 | 75724.0 | -1.00 | 0.54 | 1.02 | 17 | STOP | 2.99 | 0.11 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 13 | 2026-04-29 15:00 | BUY | 77604.6 | 76623.4 | -1.00 | 0.00 | 1.21 | 2 | STOP | 2.70 | 0.66 | no | IMMEDIATE_ADVERSE_MOVE |
-| 14 | 2026-04-29 22:00 | SELL | 75496.9 | 76795.8 | -0.73 | 0.16 | 0.90 | 30 | TIME_STOP | 2.72 | 0.21 | no | TIME_STOP_NO_PROGRESS |
-| 15 | 2026-05-04 06:00 | BUY | 80190.6 | 79060.9 | -1.00 | 0.38 | 1.76 | 8 | STOP | 2.59 | 0.94 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 16 | 2026-05-08 13:00 | SELL | 79866.3 | 80831.2 | -1.00 | 0.34 | 1.09 | 32 | STOP | 2.59 | 0.51 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 17 | 2026-05-10 20:00 | BUY | 81376.7 | 80855.3 | -1.00 | 0.37 | 2.16 | 4 | STOP | 2.30 | 0.90 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 18 | 2026-05-11 03:00 | BUY | 82232.0 | 81038.0 | -1.00 | 0.12 | 1.45 | 4 | STOP | 2.65 | 0.54 | no | IMMEDIATE_ADVERSE_MOVE |
-| 19 | 2026-05-13 19:00 | SELL | 78818.3 | 79865.3 | -1.00 | 0.07 | 1.12 | 14 | STOP | 2.43 | 0.14 | no | IMMEDIATE_ADVERSE_MOVE |
-| 20 | 2026-05-20 19:00 | BUY | 77472.0 | 76494.2 | -1.00 | 0.73 | 1.42 | 51 | STOP | 2.48 | 0.61 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 21 | 2026-05-24 19:00 | SELL | 76363.3 | 77217.0 | -1.00 | 0.32 | 1.08 | 9 | STOP | 2.46 | 0.61 | yes | STOPPED_AFTER_MINOR_PROGRESS |
-| 22 | 2026-06-05 18:00 | SELL | 60859.5 | 63628.4 | -1.00 | 0.63 | 1.22 | 56 | STOP | 2.96 | 0.09 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 23 | 2026-06-08 04:00 | BUY | 63652.6 | 61802.7 | -1.00 | 0.30 | 1.36 | 38 | STOP | 2.69 | 0.66 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 24 | 2026-06-09 18:00 | SELL | 61535.1 | 62756.2 | -1.00 | 0.65 | 1.08 | 25 | STOP | 2.31 | 0.03 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 25 | 2026-06-17 13:00 | SELL | 64909.6 | 65836.2 | -1.00 | 0.39 | 1.00 | 6 | STOP | 2.63 | 0.02 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 26 | 2026-06-25 09:00 | BUY | 61605.1 | 59929.1 | -1.00 | 0.21 | 2.09 | 8 | STOP | 3.45 | 0.63 | yes | STOPPED_WITHOUT_PROGRESS |
-| 27 | 2026-06-25 20:00 | SELL | 59298.0 | 61393.4 | -1.00 | 0.71 | 1.01 | 161 | STOP | 2.76 | 0.41 | yes | GAVE_BACK_FAVOURABLE_MOVE |
-| 28 | 2026-07-06 17:00 | SELL | 61756.3 | 62827.4 | -1.00 | 0.06 | 1.66 | 2 | STOP | 2.61 | 0.27 | no | IMMEDIATE_ADVERSE_MOVE |
-| 29 | 2026-07-10 06:00 | BUY | 63983.9 | 62805.2 | -1.00 | 0.60 | 1.07 | 73 | STOP | 3.06 | 0.96 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 30 | 2026-07-16 12:00 | SELL | 64116.0 | 64816.0 | -1.00 | 0.39 | 1.04 | 6 | STOP | 2.08 | 0.12 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 31 | 2026-07-24 18:00 | SELL | 64045.0 | 64992.6 | -1.00 | 0.27 | 1.53 | 56 | STOP | 2.73 | 0.17 | no | STOPPED_AFTER_MINOR_PROGRESS |
-| 32 | 2026-07-27 03:00 | BUY | 65417.4 | 64910.0 | -1.00 | 0.00 | 1.03 | 2 | STOP | 2.54 | 0.66 | no | IMMEDIATE_ADVERSE_MOVE |
-| 33 | 2026-07-27 22:00 | BUY | 64890.5 | 64010.3 | -1.00 | 0.21 | 1.26 | 4 | STOP | 2.70 | 0.42 | no | STOPPED_WITHOUT_PROGRESS |
-| 34 | 2026-07-28 09:00 | SELL | 63437.7 | 64416.3 | -1.00 | 0.72 | 1.04 | 25 | STOP | 3.05 | 0.22 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 35 | 2026-07-30 14:00 | BUY | 64588.4 | 63675.1 | -1.00 | 0.89 | 1.06 | 23 | STOP | 2.65 | 0.94 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 36 | 2026-07-31 21:00 | SELL | 63234.9 | 64144.2 | -1.00 | 1.07 | 1.11 | 83 | STOP | 2.60 | 0.22 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 37 | 2026-08-19 19:00 | BUY | 68552.9 | 67862.3 | -1.00 | 0.60 | 1.07 | 2 | STOP | 1.33 | 0.78 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 38 | 2026-08-27 18:00 | BUY | 80227.1 | 78862.5 | -1.00 | 0.89 | 1.33 | 24 | STOP | 2.42 | 0.83 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 39 | 2026-08-31 22:00 | BUY | 79032.6 | 77609.9 | -1.00 | 0.15 | 1.08 | 19 | STOP | 2.89 | 0.84 | no | IMMEDIATE_ADVERSE_MOVE |
-| 40 | 2026-09-08 06:00 | BUY | 78947.0 | 78155.3 | -1.00 | 0.06 | 1.66 | 11 | STOP | 2.66 | 0.19 | yes | IMMEDIATE_ADVERSE_MOVE |
-| 41 | 2026-09-08 18:00 | SELL | 78552.8 | 79602.5 | -1.00 | 0.27 | 1.15 | 18 | STOP | 2.65 | 0.69 | yes | STOPPED_AFTER_MINOR_PROGRESS |
-| 42 | 2026-09-10 17:00 | SELL | 77177.4 | 78220.4 | -1.00 | 1.08 | 2.06 | 24 | STOP | 2.36 | 0.27 | no | GAVE_BACK_FAVOURABLE_MOVE |
-| 43 | 2026-09-12 13:00 | BUY | 77364.9 | 76892.2 | -0.09 | 0.00 | 0.00 | 0 | END_OF_TEST | 1.58 | 0.33 | no | UNCLASSIFIED |
+| 1 | 2026-03-20 07:00 | BUY | 70791.9 | 69724.9 | -1.00 | 0.53 | 1.14 | 10 | STOP | 2.01 | 0.84 | yes | GAVE_BACK_FAVOURABLE_MOVE |
+| 2 | 2026-03-23 03:00 | SELL | 67658.7 | 68524.5 | -1.00 | 0.15 | 1.07 | 3 | STOP | 1.78 | 0.25 | no | IMMEDIATE_ADVERSE_MOVE |
+| 3 | 2026-03-23 16:00 | BUY | 71500.1 | 70005.9 | -1.00 | 0.20 | 1.02 | 24 | STOP | 1.96 | 0.92 | no | STOPPED_WITHOUT_PROGRESS |
+| 4 | 2026-03-25 14:00 | BUY | 71695.5 | 70945.1 | -1.00 | 0.34 | 1.52 | 4 | STOP | 1.47 | 0.90 | no | STOPPED_AFTER_MINOR_PROGRESS |
+| 5 | 2026-03-28 22:00 | BUY | 66924.5 | 66411.5 | -1.00 | 0.15 | 1.27 | 4 | STOP | 1.66 | 0.72 | no | IMMEDIATE_ADVERSE_MOVE |
+| 6 | 2026-03-30 04:00 | SELL | 66265.4 | 67052.0 | -1.00 | 0.00 | 1.50 | 2 | STOP | 1.68 | 0.78 | yes | IMMEDIATE_ADVERSE_MOVE |
+| 7 | 2026-04-01 11:00 | BUY | 68696.2 | 67736.5 | -1.00 | 0.49 | 1.74 | 18 | STOP | 1.68 | 0.80 | no | STOPPED_AFTER_MINOR_PROGRESS |
+| 8 | 2026-04-10 06:00 | BUY | 71976.0 | 70763.0 | -1.00 | 1.50 | 1.06 | 60 | STOP | 2.25 | 0.51 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 9 | 2026-04-17 17:00 | BUY | 77352.5 | 76548.6 | -1.00 | 1.22 | 1.08 | 19 | STOP | 1.32 | 0.96 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 10 | 2026-04-20 23:00 | BUY | 76294.1 | 75211.6 | -1.00 | 0.55 | 1.16 | 22 | STOP | 2.07 | 0.90 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 11 | 2026-04-22 13:00 | BUY | 78013.6 | 77009.1 | -1.00 | 1.44 | 1.07 | 32 | STOP | 2.09 | 0.92 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 12 | 2026-04-26 23:00 | BUY | 78241.2 | 77848.7 | -1.00 | 1.71 | 1.04 | 2 | STOP | 1.66 | 0.73 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 13 | 2026-04-27 01:00 | BUY | 78421.2 | 78017.9 | -1.00 | 1.03 | 1.15 | 1 | STOP | 1.19 | 0.62 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 14 | 2026-04-27 06:00 | BUY | 79142.1 | 78248.3 | -1.00 | 0.19 | 1.75 | 3 | STOP | 2.14 | 0.82 | no | IMMEDIATE_ADVERSE_MOVE |
+| 15 | 2026-04-28 00:00 | SELL | 76953.0 | 77645.7 | -1.00 | 1.88 | 1.21 | 37 | STOP | 1.75 | 0.11 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 16 | 2026-04-29 22:00 | SELL | 75496.9 | 76339.9 | -1.00 | 0.25 | 1.13 | 7 | STOP | 1.76 | 0.21 | no | STOPPED_WITHOUT_PROGRESS |
+| 17 | 2026-05-04 06:00 | BUY | 80190.6 | 79464.4 | -1.00 | 0.59 | 2.74 | 8 | STOP | 1.67 | 0.94 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 18 | 2026-05-05 08:00 | BUY | 80909.2 | 79797.9 | -1.00 | 1.73 | 1.10 | 59 | STOP | 2.19 | 0.88 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 19 | 2026-05-07 19:00 | SELL | 79893.3 | 80647.5 | -1.00 | 0.94 | 1.02 | 37 | STOP | 1.73 | 0.05 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 20 | 2026-05-09 22:00 | BUY | 80919.3 | 80541.0 | -1.00 | 1.72 | 1.76 | 26 | STOP | 1.52 | 0.86 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 21 | 2026-05-11 03:00 | BUY | 82232.0 | 81464.4 | -1.00 | 0.18 | 1.26 | 1 | STOP | 1.71 | 0.54 | no | IMMEDIATE_ADVERSE_MOVE |
+| 22 | 2026-05-13 19:00 | SELL | 78818.3 | 79499.4 | -1.00 | 0.10 | 1.09 | 2 | STOP | 1.58 | 0.14 | no | IMMEDIATE_ADVERSE_MOVE |
+| 23 | 2026-05-18 09:00 | SELL | 76912.0 | 77655.6 | -1.00 | 0.45 | 1.19 | 7 | STOP | 2.12 | 0.16 | no | STOPPED_AFTER_MINOR_PROGRESS |
+| 24 | 2026-05-18 18:00 | SELL | 76389.6 | 77182.0 | -1.00 | 0.46 | 1.00 | 7 | STOP | 1.82 | 0.15 | no | STOPPED_AFTER_MINOR_PROGRESS |
+| 25 | 2026-05-23 12:00 | SELL | 74665.8 | 75397.9 | -1.00 | 0.08 | 1.40 | 6 | STOP | 2.13 | 0.12 | no | IMMEDIATE_ADVERSE_MOVE |
+| 26 | 2026-05-24 19:00 | SELL | 76363.3 | 76920.1 | -1.00 | 0.49 | 1.15 | 7 | STOP | 1.61 | 0.61 | yes | STOPPED_AFTER_MINOR_PROGRESS |
+| 27 | 2026-05-28 07:00 | SELL | 73248.3 | 74122.0 | -1.00 | 0.86 | 1.08 | 36 | STOP | 1.84 | 0.13 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 28 | 2026-06-01 00:00 | SELL | 73738.8 | 74123.1 | -1.00 | 0.63 | 1.19 | 3 | STOP | 1.79 | 0.57 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 29 | 2026-06-04 04:00 | SELL | 63333.6 | 64538.2 | -1.00 | 1.64 | 1.18 | 4 | STOP | 1.53 | 0.01 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 30 | 2026-06-05 20:00 | SELL | 61377.9 | 63274.5 | -1.00 | 1.19 | 1.51 | 54 | STOP | 1.93 | 0.24 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 31 | 2026-06-08 04:00 | BUY | 63652.6 | 62463.4 | -1.00 | 0.00 | 1.06 | 5 | STOP | 1.73 | 0.66 | no | IMMEDIATE_ADVERSE_MOVE |
+| 32 | 2026-06-09 21:00 | SELL | 61687.2 | 62634.2 | -1.00 | 1.00 | 1.23 | 22 | STOP | 1.79 | 0.33 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 33 | 2026-06-14 14:00 | BUY | 64537.1 | 64163.6 | -1.00 | 0.26 | 1.82 | 4 | STOP | 1.73 | 0.75 | no | STOPPED_AFTER_MINOR_PROGRESS |
+| 34 | 2026-06-14 20:00 | SELL | 63933.0 | 64330.3 | -1.00 | 0.65 | 4.38 | 5 | STOP | 1.66 | 0.04 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 35 | 2026-06-15 19:00 | BUY | 67306.2 | 66632.5 | -1.00 | 0.00 | 1.43 | 4 | STOP | 1.72 | 0.96 | no | IMMEDIATE_ADVERSE_MOVE |
+| 36 | 2026-06-16 00:00 | BUY | 66535.4 | 65822.4 | -1.00 | 0.03 | 1.20 | 6 | STOP | 1.93 | 0.61 | no | IMMEDIATE_ADVERSE_MOVE |
+| 37 | 2026-06-18 20:00 | SELL | 62672.1 | 63464.1 | -1.00 | 0.53 | 1.25 | 31 | STOP | 1.52 | 0.09 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 38 | 2026-06-20 10:00 | BUY | 63754.9 | 63234.3 | -1.00 | 0.74 | 1.09 | 8 | STOP | 1.76 | 0.84 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 39 | 2026-06-23 13:00 | SELL | 62368.8 | 63133.2 | -1.00 | 0.56 | 1.12 | 26 | STOP | 1.84 | 0.10 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 40 | 2026-06-25 20:00 | SELL | 59298.0 | 60653.1 | -1.00 | 0.72 | 1.07 | 15 | STOP | 1.78 | 0.41 | yes | GAVE_BACK_FAVOURABLE_MOVE |
+| 41 | 2026-06-27 18:00 | BUY | 60627.3 | 60185.1 | -1.00 | 0.69 | 1.26 | 5 | STOP | 1.24 | 0.93 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 42 | 2026-06-29 04:00 | SELL | 59654.5 | 60410.5 | -1.00 | 1.02 | 1.50 | 12 | STOP | 1.76 | 0.33 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 43 | 2026-06-30 22:00 | SELL | 58671.4 | 59392.2 | -1.00 | 1.20 | 1.09 | 10 | STOP | 1.76 | 0.26 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 44 | 2026-07-04 22:00 | BUY | 63175.3 | 62787.8 | -1.00 | 0.71 | 1.00 | 7 | STOP | 1.42 | 0.87 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 45 | 2026-07-06 04:00 | BUY | 63761.8 | 63226.1 | -1.00 | 0.27 | 1.20 | 3 | STOP | 1.65 | 0.73 | no | STOPPED_AFTER_MINOR_PROGRESS |
+| 46 | 2026-07-06 07:00 | BUY | 63309.2 | 62712.4 | -1.00 | 0.13 | 1.16 | 6 | STOP | 1.88 | 0.53 | no | IMMEDIATE_ADVERSE_MOVE |
+| 47 | 2026-07-07 04:00 | BUY | 64211.9 | 63190.3 | -1.00 | 0.00 | 1.05 | 3 | STOP | 2.30 | 0.74 | no | IMMEDIATE_ADVERSE_MOVE |
+| 48 | 2026-07-10 18:00 | BUY | 63929.4 | 63274.4 | -1.00 | 0.88 | 1.08 | 60 | STOP | 1.74 | 0.70 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 49 | 2026-07-17 12:00 | SELL | 62872.5 | 63424.0 | -1.00 | 0.64 | 1.15 | 6 | STOP | 1.73 | 0.14 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 50 | 2026-07-21 12:00 | BUY | 66243.7 | 65656.4 | -1.00 | 1.21 | 1.20 | 28 | STOP | 1.72 | 0.97 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 51 | 2026-07-24 18:00 | SELL | 64045.0 | 64662.2 | -1.00 | 0.41 | 1.16 | 48 | STOP | 1.77 | 0.17 | no | STOPPED_AFTER_MINOR_PROGRESS |
+| 52 | 2026-07-27 03:00 | BUY | 65417.4 | 65091.2 | -1.00 | 0.00 | 1.12 | 1 | STOP | 1.63 | 0.66 | no | IMMEDIATE_ADVERSE_MOVE |
+| 53 | 2026-07-27 04:00 | BUY | 65149.9 | 64793.9 | -1.00 | 1.65 | 1.97 | 14 | STOP | 1.71 | 0.71 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 54 | 2026-07-28 08:00 | SELL | 63339.0 | 64083.0 | -1.00 | 0.81 | 1.02 | 12 | STOP | 2.29 | 0.15 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 55 | 2026-07-30 01:00 | SELL | 63841.2 | 64706.2 | -1.00 | 0.29 | 1.20 | 14 | STOP | 1.91 | 0.45 | yes | STOPPED_AFTER_MINOR_PROGRESS |
+| 56 | 2026-07-30 15:00 | BUY | 64809.0 | 64258.9 | -1.00 | 1.08 | 1.13 | 15 | STOP | 1.63 | 0.94 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 57 | 2026-07-31 20:00 | SELL | 62855.9 | 63472.6 | -1.00 | 0.96 | 1.11 | 34 | STOP | 1.76 | 0.27 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 58 | 2026-08-03 11:00 | SELL | 62607.7 | 63091.4 | -1.00 | 0.67 | 1.61 | 6 | STOP | 2.05 | 0.17 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 59 | 2026-08-08 19:00 | BUY | 65087.2 | 64943.7 | -1.00 | 0.34 | 1.09 | 7 | STOP | 1.16 | 0.84 | no | STOPPED_AFTER_MINOR_PROGRESS |
+| 60 | 2026-08-09 06:00 | SELL | 64809.3 | 64984.5 | -1.00 | 0.53 | 1.03 | 9 | STOP | 1.75 | 0.13 | no | GAVE_BACK_FAVOURABLE_MOVE |
+| 61 | 2026-08-09 18:00 | BUY | 65278.7 | 65110.4 | -1.00 | 0.00 | 1.27 | 6 | STOP | 1.65 | 0.87 | no | IMMEDIATE_ADVERSE_MOVE |
+| 62 | 2026-08-10 11:00 | BUY | 65219.4 | 64798.7 | -1.00 | 0.23 | 1.70 | 6 | STOP | 2.21 | 0.66 | no | STOPPED_WITHOUT_PROGRESS |
 
 ## 5. Market conditions
 
@@ -138,29 +149,28 @@ Every losing trade with the evidence that produced its label. `MFE` is the best 
 
 | Regime | Trades | Win rate | Avg R | Total R |
 |---|---:|---:|---:|---:|
-| TREND_BULL | 36 | 55.6% | +0.025 | +0.89 |
-| TREND_BEAR | 34 | 41.2% | -0.108 | -3.66 |
-| BREAKOUT | 7 | 28.6% | -0.400 | -2.80 |
-| LIQUIDITY_SWEEP | 2 | 50.0% | +0.164 | +0.33 |
-| COMPRESSION | 1 | 0.0% | -0.087 | -0.09 |
+| TREND_BEAR | 39 | 41.0% | +0.115 | +4.50 |
+| TREND_BULL | 39 | 20.5% | -0.502 | -19.57 |
+| BREAKOUT | 10 | 20.0% | -0.500 | -5.00 |
+| COMPRESSION | 1 | 100.0% | +2.000 | +2.00 |
 
 ### By volatility at entry (ATR percentile over the trailing 200 bars)
 
 | ATR percentile | Trades | Win rate | Avg R | Total R |
 |---|---:|---:|---:|---:|
-| Q1 lowest vol | 5 | 80.0% | +1.485 | +7.43 |
-| Q2 | 27 | 25.9% | -0.570 | -15.38 |
-| Q3 | 19 | 57.9% | -0.055 | -1.05 |
-| Q4 highest vol | 29 | 51.7% | +0.126 | +3.66 |
+| Q1 lowest vol | 19 | 42.1% | -0.004 | -0.07 |
+| Q2 | 28 | 17.9% | -0.589 | -16.50 |
+| Q3 | 13 | 38.5% | +0.038 | +0.50 |
+| Q4 highest vol | 29 | 31.0% | -0.069 | -2.00 |
 
 ### By direction and trend alignment
 
 | Group | Trades | Win rate | Avg R | Total R |
 |---|---:|---:|---:|---:|
-| BUY | 43 | 48.8% | -0.067 | -2.87 |
-| SELL | 37 | 43.2% | -0.067 | -2.47 |
-| with-trend | 68 | 47.1% | -0.072 | -4.89 |
-| counter-trend | 12 | 41.7% | -0.038 | -0.46 |
+| BUY | 45 | 24.4% | -0.390 | -17.57 |
+| SELL | 44 | 36.4% | -0.011 | -0.50 |
+| with-trend | 84 | 32.1% | -0.156 | -13.07 |
+| counter-trend | 5 | 0.0% | -1.000 | -5.00 |
 
 ## 6. Parameter counterfactuals (same entries, different parameters)
 
@@ -170,15 +180,15 @@ Each row re-simulates the **identical entries** — same entry price, same entry
 
 | tp_r | Trades | Win rate | Expectancy (R) | Total R | Avg win | Avg loss | PF |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| 0.25 | 79 | 78.5% | -0.0406 | -3.20 | +0.229 | -1.023 | 0.82 |
-| 0.3 | 79 | 73.4% | -0.0633 | -5.00 | +0.279 | -1.008 | 0.76 |
-| 0.4 | 79 | 63.3% | -0.1257 | -9.93 | +0.379 | -0.995 | 0.66 |
-| 0.5 | 79 | 60.8% | -0.0968 | -7.65 | +0.478 | -0.987 | 0.75 |
-| 0.75 | 79 | 54.4% | -0.0630 | -4.98 | +0.693 | -0.966 | 0.86 |
-| 1 | 79 | 50.6% | -0.0183 | -1.44 | +0.910 | -0.970 | 0.96 |
-| 1.5 | 79 | 43.0% | -0.0345 | -2.72 | +1.186 | -0.956 | 0.94 |
-| 2 | 79 | 40.5% | -0.0063 | -0.50 | +1.367 | -0.941 | 0.99 |
-| 3 | 79 | 36.7% | -0.0567 | -4.48 | +1.444 | -0.927 | 0.90 |
+| 0.25 | 89 | 75.3% | -0.0975 | -8.68 | +0.213 | -1.042 | 0.62 |
+| 0.3 | 89 | 73.0% | -0.0890 | -7.93 | +0.264 | -1.045 | 0.68 |
+| 0.4 | 89 | 67.4% | -0.0947 | -8.43 | +0.366 | -1.047 | 0.72 |
+| 0.5 | 89 | 61.8% | -0.1115 | -9.93 | +0.466 | -1.045 | 0.72 |
+| 0.75 | 89 | 52.8% | -0.1143 | -10.18 | +0.716 | -1.043 | 0.77 |
+| 1 | 89 | 48.3% | -0.0789 | -7.02 | +0.952 | -1.042 | 0.85 |
+| 1.5 | 89 | 38.2% | -0.1165 | -10.36 | +1.334 | -1.013 | 0.81 |
+| 2 | 89 | 33.7% | -0.1248 | -11.11 | +1.627 | -1.015 | 0.81 |
+| 3 | 89 | 27.0% | -0.1904 | -16.94 | +2.029 | -1.010 | 0.74 |
 
 ### 6b. Stop distance (multiple of the original stop, target held fixed in R:R)
 
@@ -186,11 +196,11 @@ The target widens with the stop, so this scales the whole trade envelope to a di
 
 | Stop × | Trades | Win rate | Expectancy (R) | Total R |
 |---|---:|---:|---:|---:|
-| 0.75× | 79 | 31.6% | -0.0730 | -5.77 |
-| 1× | 79 | 36.7% | -0.0224 | -1.77 |
-| 1.5× | 79 | 44.3% | +0.0487 | +3.85 |
-| 2× | 79 | 48.1% | +0.0827 | +6.53 |
-| 3× | 79 | 48.1% | +0.1316 | +10.40 |
+| 0.75× | 89 | 27.0% | -0.1940 | -17.27 |
+| 1× | 89 | 28.1% | -0.2158 | -19.20 |
+| 1.5× | 89 | 34.8% | -0.0989 | -8.80 |
+| 2× | 89 | 37.1% | -0.1652 | -14.70 |
+| 3× | 89 | 40.5% | -0.1252 | -11.15 |
 
 ### 6c. Stop distance with the target held at its ORIGINAL price
 
@@ -198,33 +208,31 @@ Here only the stop moves — the target stays exactly where the strategy put it.
 
 | Stop × | Trades | Win rate | Expectancy (R) | Total R |
 |---|---:|---:|---:|---:|
-| 0.75× | 79 | 31.6% | -0.0112 | -0.89 |
-| 1× | 79 | 36.7% | -0.0224 | -1.77 |
-| 1.5× | 79 | 44.3% | +0.0110 | +0.87 |
-| 2× | 79 | 48.1% | +0.0122 | +0.97 |
-| 3× | 79 | 48.1% | +0.0340 | +2.68 |
+| 0.75× | 89 | 20.2% | -0.3276 | -29.15 |
+| 1× | 89 | 28.1% | -0.2157 | -19.20 |
+| 1.5× | 89 | 38.2% | -0.0770 | -6.85 |
+| 2× | 89 | 41.6% | -0.1155 | -10.28 |
+| 3× | 89 | 46.1% | -0.1113 | -9.90 |
 
 ## 7. What is actually wrong
 
-**Dominant failure mode: `GAVE_BACK_FAVOURABLE_MOVE`** — 14 of 43 losses (33%), costing -14.00 R. Gave back a favourable move: the trade ran into profit, then reversed all the way to the stop. Exit management, not entry selection.
+**Dominant failure mode: `GAVE_BACK_FAVOURABLE_MOVE`** — 35 of 62 losses (56%), costing -35.00 R. Gave back a favourable move: the trade ran into profit, then reversed all the way to the stop. Exit management, not entry selection.
 
-**41 of 43 losses are stop-outs** and 1 are time stops — so the loss mix is dominated by premature stop-outs.
+**62 of 62 losses are stop-outs** and 0 are time stops — so the loss mix is dominated by premature stop-outs.
 
-**The stop is too tight for this instrument.** Holding the target at exactly the price the strategy chose and moving only the stop, expectancy rises from -0.0224 R at 1× to +0.0340 R at 3× (win rate 36.7% → 48.1%). Because only the stop moved, this is noise stop-out, not a target that was set too close.
+**The stop is too tight for this instrument.** Holding the target at exactly the price the strategy chose and moving only the stop, expectancy rises from -0.2157 R at 1× to -0.0770 R at 1.5× (win rate 28.1% → 38.2%). Because only the stop moved, this is noise stop-out, not a target that was set too close.
 
-**The payoff is inverted.** 33 trades (41%) closed on the trail/breakeven stop for an average of +0.677 R, while 41 (51%) took the full -1.000 R loss. Only 4 trades reached the target. Winners are being cut short while losers run to the stop — that structure loses money at any win rate below roughly 60%.
+**5 losses were taken against the 24-bar trend** and went at least 0.75R against immediately afterwards.
 
-**7 losses were taken against the 24-bar trend** and went at least 0.75R against immediately afterwards.
+**26 losses were entered at the extreme of the 24-bar range** (bought in the top 15% / sold in the bottom 15%) — chasing.
 
-**14 losses were entered at the extreme of the 24-bar range** (bought in the top 15% / sold in the bottom 15%) — chasing.
-
-**7 losses occurred in the highest-volatility quartile** (ATR ≥ 85th percentile of the trailing 200 bars).
+**11 losses occurred in the highest-volatility quartile** (ATR ≥ 85th percentile of the trailing 200 bars).
 
 ## 8. Method and limitations
 
-* Real MT5 H1 bars for `BTCUSD` (BTCUSD#), 4392 bars, 2026-03-13 14:00:00+00:00 → 2026-09-12 13:00:00+00:00; provenance `MT5_TERMINAL_REAL`.
+* Real MT5 H1 bars for `BTCUSD` (BTCUSD#), 4392 bars, 2026-03-14 07:00:00+00:00 → 2026-09-13 06:00:00+00:00; provenance `MT5_TERMINAL_REAL`.
 * Execution is the production `BacktestEngine`: entry at the next bar's open, spread paid on the traded side, stop tested before target within a bar (conservative — a bar spanning both is booked as a loss).
 * Costs: median spread 2250.00 pips from the data plus 0.5 pips slippage per side. Swap/financing on crypto positions is NOT modelled, so a real long-held BTC position would carry additional financing cost.
 * Failure attribution uses only the engine's own outputs (exit reason, MFE, MAE, bars held) plus market context computed from the same bars. Each rule is a numeric predicate; the ledger shows the numbers.
 * MFE/MAE are bar-resolution excursions, so they understate true intra-bar extremes on a volatile instrument like BTC.
-* One instrument, one window. 80 trades is a small sample: per-bucket win rates below carry wide confidence intervals.
+* One instrument, one window. 89 trades is a small sample: per-bucket win rates below carry wide confidence intervals.
