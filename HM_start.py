@@ -235,7 +235,7 @@ def _start_background_tunnel(port: int = 8501):
     t_cf = threading.Thread(target=_cloudflare_worker, args=(port,), daemon=True, name="hm_tunnel_cf")
     t_cf.start()
 
-def hm_start(mode: str = "live", port: int = 8501, host: str = "127.0.0.1", trade_style: str = "ALL"):
+def hm_start(mode: str = "live", port: int = 8501, host: str = "127.0.0.1", trade_style: str = "DAY_TRADING"):
     local_ip = get_local_wifi_ip()
 
     # Remote tunnels start automatically by default for mobile phone access (disable with JARVIS_ENABLE_TUNNEL=0 if needed)
@@ -288,13 +288,21 @@ def hm_start(mode: str = "live", port: int = 8501, host: str = "127.0.0.1", trad
 def main():
     # Default to LIVE execution mode; 'paper' mode can be passed as argument for testing
     mode = "live"
+    trade_style = os.environ.get("JARVIS_TRADE_STYLE", "DAY_TRADING")
     if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
         raw = sys.argv[1].lower()
         if raw in {"paper", "test", "sim", "backtest", "demo"}:
             mode = "paper"
+        elif raw.upper() in {"SCALP", "DAY_TRADING", "SWING", "POSITION", "ALL"}:
+            trade_style = raw.upper()
         else:
             mode = "live"
-    hm_start(mode=mode)
+    if len(sys.argv) > 2 and not sys.argv[2].startswith("-"):
+        raw2 = sys.argv[2].upper()
+        if raw2 in {"SCALP", "DAY_TRADING", "SWING", "POSITION", "ALL"}:
+            trade_style = raw2
+
+    hm_start(mode=mode, trade_style=trade_style)
 
 if __name__ == "__main__":
     main()

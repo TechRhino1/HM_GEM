@@ -96,8 +96,12 @@ class PositionSizer:
         if raw_lots < min_vol:
             actual_risk_dollars = min_vol * dollar_risk_per_lot
             actual_risk_pct = (actual_risk_dollars / (account_balance + 1e-9)) * 100.0
-            if account_balance < 1000.0:
-                # On smaller accounts, 0.01 is the broker's indivisible minimum floor.
+            if account_balance < 100.0:
+                # Sub-$100 micro account: strict risk ceiling (P0 safety test contract)
+                max_acceptable_risk_pct = min(3.0, 2.0 * effective_risk_pct)
+                is_tolerable = (actual_risk_pct <= max_acceptable_risk_pct)
+            elif account_balance < 1000.0:
+                # Small retail account ($100-$1,000): 0.01 is indivisible minimum broker lot
                 # Allow 0.01 lot if risk <= 5.0% or risk dollars <= $20.0
                 is_tolerable = (actual_risk_pct <= 5.0) or (actual_risk_dollars <= 20.0)
                 max_acceptable_risk_pct = 5.0

@@ -194,12 +194,9 @@ def evaluate_exit(
     # Deferred until the trade has proven itself. Locking at 1R was the primary
     # cause of +20R winners being closed at +0.9R.
     #
-    # A pending partial also unlocks breakeven, because taking risk off the table
-    # is itself the proof the trade is working. NOTE: the caller owns the
-    # "partial already taken" flag; if it cannot actually split the lots it must
-    # still set `partial_already_taken=True` on subsequent calls, otherwise this
-    # function will keep reporting the partial as due.
-    be_triggered = be_already_locked or partial_already_taken or dec.partial_close_pct > 0.0
+    # Breakeven is strictly deferred until r_multiple reaches policy.be_trigger_r (typically 1.2R or 2.0R),
+    # preserving breathing room for the runner after taking partial profits.
+    be_triggered = be_already_locked
     if not be_triggered and r_multiple >= policy.be_trigger_r:
         be_triggered = True
         dec.actions.append(f"BE_LOCK_{policy.be_trigger_r:.2f}R")

@@ -38,6 +38,14 @@ from jarvis.market.sessions import SessionEngine
 
 logger = logging.getLogger("JARVIS_Orchestrator")
 
+def _normalize_style(s: str) -> str:
+    s = (s or "").upper()
+    if s in ("DAY", "INTRADAY", "DAY_TRADING"):
+        return "DAY_TRADING"
+    if s in ("SCALP", "SCALPING"):
+        return "SCALP"
+    return s
+
 class JarvisOrchestrator:
     def __init__(
         self,
@@ -71,9 +79,11 @@ class JarvisOrchestrator:
         # multi-fires before MT5StateSynchronizer (1 s lag) can catch up.
         self._execution_in_progress: set = set()
         self._execution_lock = threading.Lock()
-        # Per-symbol last-execution timestamp for 10-min same-symbol cooldown
+        # Per-symbol execution start timestamp for watchdog recovery
+        self._execution_start_time: Dict[str, float] = {}
+        # Per-symbol last-execution timestamp for 15-min same-symbol cooldown
         self._last_execution_time: Dict[str, float] = {}
-        self._SAME_SYMBOL_COOLDOWN_SEC = 600  # 10 minutes
+        self._SAME_SYMBOL_COOLDOWN_SEC = 900  # 15 minutes
 
         # Per-symbol regime tracking to eliminate cross-symbol contamination and race conditions
         self._regime_state: Dict[str, Dict[str, Any]] = {}
@@ -130,12 +140,13 @@ class JarvisOrchestrator:
                 with self._execution_lock:
                     stale_syms = []
                     for sym in list(self._execution_in_progress):
-                        last_exec = self._last_execution_time.get(sym, 0.0)
-                        if (now - last_exec) > 60.0:  # Lock held longer than 60s without release
+                        start_t = self._execution_start_time.get(sym, now)
+                        if (now - start_t) > 60.0:  # Lock held longer than 60s without release
                             stale_syms.append(sym)
                     for sym in stale_syms:
                         logger.warning(f"Watchdog auto-releasing stale execution lock for {sym}.")
                         self._execution_in_progress.discard(sym)
+                        self._execution_start_time.pop(sym, None)
 
                 # 2. Broker Connection and Quote Health Check
                 acc = self.mt5_client.get_account_snapshot()
@@ -243,6 +254,17 @@ class JarvisOrchestrator:
         if len(all_closed) >= 10:
             self.decision_engine.calibrator.update_calibration_from_history(all_closed)
 
+        # 6. Trigger same-symbol cooldown upon trade exit to prevent rapid re-entry
+        if trade_symbol:
+            try:
+                from jarvis.core.symbol_specs import resolve_symbol
+                can_sym = resolve_symbol(trade_symbol).canonical
+            except Exception:
+                can_sym = trade_symbol.upper().replace("/", "").replace("_", "").replace("-", "")
+            with self._execution_lock:
+                self._last_execution_time[can_sym] = time.time()
+            logger.info(f"Cooldown {self._SAME_SYMBOL_COOLDOWN_SEC}s started for {can_sym} following trade #{ticket} close.")
+
         logger.info(
             f"🔄 Closed-trade self-learning loop completed for #{ticket}: "
             f"PnL=${pnl:.2f}, Win={is_win}, R={r_multiple}, Strat={strategy}, Regime={regime_name}, Style={trade_style}"
@@ -323,14 +345,6 @@ class JarvisOrchestrator:
         self.state_manager.record_decision(symbol, decision)
 
         # 6. Risk Engine Independent Authorization & Sizing (only if opportunity matches active trading style)
-        def _normalize_style(s: str) -> str:
-            s = (s or "").upper()
-            if s in ("DAY", "INTRADAY", "DAY_TRADING"):
-                return "DAY_TRADING"
-            if s in ("SCALP", "SCALPING"):
-                return "SCALP"
-            return s
-
         orch_style = (self.trade_style or "ALL").upper()
         is_exec_style_match = (orch_style == "ALL") or (_normalize_style(active_trade_style) == _normalize_style(orch_style))
 
@@ -403,7 +417,7 @@ class JarvisOrchestrator:
             decision.decision = "WAIT"
             decision.execution_authorized = False
             auth_res = {"authorized": False, "reason": f"HARD_SYMBOL_LIMIT: Symbol {symbol} already has 2 active positions (Max 2)."}
-        elif cooldown_active and len(active_sym_positions) == 0 and decision.decision == "EXECUTE":
+        elif cooldown_active and decision.decision == "EXECUTE":
             remaining = int(self._SAME_SYMBOL_COOLDOWN_SEC - (time.time() - last_exec_time))
             decision.decision = "WAIT"
             decision.execution_authorized = False
@@ -454,6 +468,7 @@ class JarvisOrchestrator:
 
             with self._execution_lock:
                 self._execution_in_progress.add(canonical_sym)
+                self._execution_start_time[canonical_sym] = time.time()
 
             try:
                 exec_res = self.execution_engine.execute_decision(decision, lots)
@@ -468,6 +483,7 @@ class JarvisOrchestrator:
                 # Always release in-progress lock; update cooldown only on successful fill
                 with self._execution_lock:
                     self._execution_in_progress.discard(canonical_sym)
+                    self._execution_start_time.pop(canonical_sym, None)
                     if exec_res and exec_res.get("status") == "FILLED":
                         self._last_execution_time[canonical_sym] = time.time()
                         logger.info(f"Execution lock released for {canonical_sym}. Cooldown {self._SAME_SYMBOL_COOLDOWN_SEC}s started.")
@@ -585,7 +601,10 @@ class JarvisOrchestrator:
                 )
             )
 
-            if is_exec_ready:
+            orch_style = (self.trade_style or "ALL").upper()
+            is_exec_style_match = (orch_style == "ALL") or (_normalize_style(best_opportunity.trade_style) == _normalize_style(orch_style))
+
+            if is_exec_ready and is_exec_style_match:
                 decision = best_opportunity.decision_obj
                 sym = best_opportunity.symbol
                 canonical_sym = sym.upper().replace("/", "").replace("_", "").replace("-", "")
@@ -650,6 +669,7 @@ class JarvisOrchestrator:
 
                         with self._execution_lock:
                             self._execution_in_progress.add(canonical_sym)
+                            self._execution_start_time[canonical_sym] = time.time()
 
                         exec_res = None
                         try:
@@ -665,11 +685,12 @@ class JarvisOrchestrator:
                         finally:
                             with self._execution_lock:
                                 self._execution_in_progress.discard(canonical_sym)
+                                self._execution_start_time.pop(canonical_sym, None)
                                 if exec_res and exec_res.get("status") == "FILLED":
                                     self._last_execution_time[canonical_sym] = time.time()
                                     logger.info(f"Execution lock released for {canonical_sym}. Cooldown {self._SAME_SYMBOL_COOLDOWN_SEC}s started.")
                 else:
-                    logger.info(f"🚀 Autonomous Multi-Style Execution dispatched for {best_opportunity.symbol} ({best_opportunity.trade_style})")
+                    logger.info(f"Arbiter execution suppressed for {best_opportunity.symbol} ({best_opportunity.trade_style}): execution lock or cooldown active.")
 
         # 3. Convert ranked opportunities to radar items for state manager and dashboard
         radar_results = [cand.to_radar_item() for cand in ranked_candidates]

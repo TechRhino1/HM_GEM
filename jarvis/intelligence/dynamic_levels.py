@@ -173,22 +173,22 @@ class DynamicRiskAndLevelsEngine:
                 struct_sl_dist = atr * (0.85 if is_strong_trend else (1.0 if is_ranging else 0.95)) + effective_buffer
 
             if style == "SCALP":
-                sl_dist = min(0.65 * atr, max(0.20 * atr, struct_sl_dist * 0.5))
-                min_target_rr = 1.3
-                asym_rr = 2.0
+                sl_dist = min(1.20 * atr, max(0.85 * atr, struct_sl_dist * 0.7))
+                min_target_rr = 1.8
+                asym_rr = 2.5
             elif style in ("DAY_TRADING", "DAY", "INTRADAY"):
                 if is_index:
-                    sl_dist = min(0.90 * atr, max(0.35 * atr, struct_sl_dist * 0.7))
+                    sl_dist = min(1.50 * atr, max(0.85 * atr, struct_sl_dist * 0.85))
                     min_target_rr = 2.0
                     asym_rr = 3.0
                 elif is_forex:
-                    sl_dist = min(1.05 * atr, max(0.40 * atr, struct_sl_dist * 0.75))
+                    sl_dist = min(1.60 * atr, max(0.95 * atr, struct_sl_dist * 0.90))
                     min_target_rr = 2.2
                     asym_rr = 3.2
                 else:
-                    sl_dist = min(1.30 * atr, max(0.45 * atr, struct_sl_dist * 0.8))
-                    min_target_rr = 1.8
-                    asym_rr = 2.8
+                    sl_dist = min(1.80 * atr, max(1.10 * atr, struct_sl_dist * 0.95))
+                    min_target_rr = 2.0
+                    asym_rr = 3.0
             else:  # SWING
                 if is_gold:
                     max_swing_sl = 2.80 * atr  # Retain winning commodity runner parameters (100% UNCHANGED)
@@ -205,6 +205,26 @@ class DynamicRiskAndLevelsEngine:
                     min_floor_sl = 0.65 * atr if (is_index or is_forex) else 0.75 * atr
 
                 sl_dist = min(max_swing_sl, max(min_floor_sl, struct_sl_dist))
+
+            # Enforce asset-class absolute stop-distance floor so stops cannot collapse into noise
+            if ("XAU" in sym_name) or ("GOLD" in sym_name):
+                min_absolute_sl = 8.00  # Never less than $8.00 stop distance on Gold
+            elif ("WTI" in sym_name) or ("OIL" in sym_name):
+                min_absolute_sl = 1.20  # Never less than $1.20 stop distance on WTI Crude
+            elif "BTC" in sym_name:
+                min_absolute_sl = 600.0  # Never less than $600 stop distance on Bitcoin
+            elif "ETH" in sym_name:
+                min_absolute_sl = 30.0   # Never less than $30 stop distance on Ethereum
+            elif "SOL" in sym_name:
+                min_absolute_sl = 2.50   # Never less than $2.50 stop distance on Solana
+            elif is_index:
+                min_absolute_sl = 15.0 if "US30" in sym_name else (8.0 if "NAS100" in sym_name else 3.0)
+            elif is_forex:
+                min_absolute_sl = 15.0 * pip_size  # Never less than 15 pips stop distance on Forex
+            else:
+                min_absolute_sl = max(1.2 * atr, 10.0 * pip_size)
+
+            sl_dist = max(sl_dist, min_absolute_sl)
 
             sl_price = round(entry_price - sl_dist, digits)
             risk_dist = max(spec.pip_size * 5, abs(entry_price - sl_price))
@@ -299,22 +319,22 @@ class DynamicRiskAndLevelsEngine:
                 struct_sl_dist = atr * (0.85 if is_strong_trend else (1.0 if is_ranging else 0.95)) + effective_buffer + spread_dist
 
             if style == "SCALP":
-                sl_dist = min(0.65 * atr + spread_dist, max(0.20 * atr, struct_sl_dist * 0.5))
-                min_target_rr = 1.3
-                asym_rr = 2.0
+                sl_dist = min(1.20 * atr + spread_dist, max(0.85 * atr, struct_sl_dist * 0.7))
+                min_target_rr = 1.8
+                asym_rr = 2.5
             elif style in ("DAY_TRADING", "DAY", "INTRADAY"):
                 if is_index:
-                    sl_dist = min(0.90 * atr + spread_dist, max(0.35 * atr, struct_sl_dist * 0.7))
+                    sl_dist = min(1.50 * atr + spread_dist, max(0.85 * atr, struct_sl_dist * 0.85))
                     min_target_rr = 2.0
                     asym_rr = 3.0
                 elif is_forex:
-                    sl_dist = min(1.05 * atr + spread_dist, max(0.40 * atr, struct_sl_dist * 0.75))
+                    sl_dist = min(1.60 * atr + spread_dist, max(0.95 * atr, struct_sl_dist * 0.90))
                     min_target_rr = 2.2
                     asym_rr = 3.2
                 else:
-                    sl_dist = min(1.30 * atr + spread_dist, max(0.45 * atr, struct_sl_dist * 0.8))
-                    min_target_rr = 1.8
-                    asym_rr = 2.8
+                    sl_dist = min(1.80 * atr + spread_dist, max(1.10 * atr, struct_sl_dist * 0.95))
+                    min_target_rr = 2.0
+                    asym_rr = 3.0
             else:  # SWING
                 if is_gold:
                     max_swing_sl = 2.80 * atr  # Retain winning commodity runner parameters (100% UNCHANGED)
@@ -331,6 +351,26 @@ class DynamicRiskAndLevelsEngine:
                     min_floor_sl = 0.65 * atr if (is_index or is_forex) else 0.75 * atr
 
                 sl_dist = min(max_swing_sl + spread_dist, max(min_floor_sl, struct_sl_dist))
+
+            # Enforce asset-class absolute stop-distance floor so stops cannot collapse into noise
+            if ("XAU" in sym_name) or ("GOLD" in sym_name):
+                min_absolute_sl = 8.00  # Never less than $8.00 stop distance on Gold
+            elif ("WTI" in sym_name) or ("OIL" in sym_name):
+                min_absolute_sl = 1.20  # Never less than $1.20 stop distance on WTI Crude
+            elif "BTC" in sym_name:
+                min_absolute_sl = 600.0  # Never less than $600 stop distance on Bitcoin
+            elif "ETH" in sym_name:
+                min_absolute_sl = 30.0   # Never less than $30 stop distance on Ethereum
+            elif "SOL" in sym_name:
+                min_absolute_sl = 2.50   # Never less than $2.50 stop distance on Solana
+            elif is_index:
+                min_absolute_sl = 15.0 if "US30" in sym_name else (8.0 if "NAS100" in sym_name else 3.0)
+            elif is_forex:
+                min_absolute_sl = 15.0 * pip_size  # Never less than 15 pips stop distance on Forex
+            else:
+                min_absolute_sl = max(1.2 * atr, 10.0 * pip_size)
+
+            sl_dist = max(sl_dist, min_absolute_sl)
 
             sl_price = round(entry_price + sl_dist, digits)
             risk_dist = max(spec.pip_size * 5, abs(sl_price - entry_price))

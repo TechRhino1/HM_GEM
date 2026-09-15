@@ -279,21 +279,6 @@ class PositionMonitorEngine:
                             self._partially_closed_tickets.add(pos.ticket)
                             logger.info(f"🎯 PARTIAL TP HIT: #{pos.ticket} {symbol} closed {close_volume} lots @ {c_price:.4f}. Remaining: {remaining_volume}")
                             actions.append(f"PARTIAL_TP_{int(target_pct*100)}%@{c_price:.4f}")
-                            # De-risk the remainder immediately: lock a breakeven
-                            # floor using the canonical policy buffer so the offset
-                            # matches what evaluate_exit would compute later.
-                            _p = self._exit_policy.get(pos.ticket) or ExitPolicy.for_symbol(symbol, spec)
-                            _be_buf = _p.buffer_distance(risk_dist_init)
-                            be_candidate = round(
-                                pos.open_price + _be_buf if pos.type == "BUY" else pos.open_price - _be_buf,
-                                digits,
-                            )
-                            if pos.type == "BUY" and be_candidate > new_sl and be_candidate < c_price:
-                                new_sl = be_candidate
-                                actions.append(f"PARTIAL_BE@{new_sl:.4f}")
-                            elif pos.type == "SELL" and (new_sl == 0 or be_candidate < new_sl) and be_candidate > c_price:
-                                new_sl = be_candidate
-                                actions.append(f"PARTIAL_BE@{new_sl:.4f}")
 
             # ── 1. Manual trade: auto-set or tighten emergency SL ──────────
             if is_manual:
@@ -305,11 +290,9 @@ class PositionMonitorEngine:
             shield_triggered, shield_action = self._check_adversarial_order_flow_shield(pos, ctx, c_price, atr, digits)
             if shield_triggered:
                 if shield_action == "CLOSE":
-                    logger.warning(
-                        f"🛡️ ADVERSARIAL ORDER FLOW SHIELD: Closing underwater/flat #{pos.ticket} ({pos.symbol} {pos.type}) "
-                        f"to prevent full stop-out."
-                    )
+                    logger.warning(f"🚨 ADVERSARIAL SHIELD LIQUIDATION: Opposing absorption trap on underwater #{pos.ticket} {symbol}")
                     self.mt5_client.close_position(pos.ticket)
+                    actions.append("ADVERSARIAL_SHIELD_CLOSE")
                     return
                 elif shield_action is not None and isinstance(shield_action, (int, float)):
                     shield_sl = float(shield_action)
@@ -902,9 +885,10 @@ class PositionMonitorEngine:
     ) -> Tuple[bool, Optional[Any]]:
         """
         Adversarial Order Flow Shield:
+        Adversarial Order Flow Shield:
         If counter volume delta > 35% or absorption trap detected while holding open trade:
-          - If in profit: Immediately ratchet SL to Bid/Ask +/- 0.15x ATR.
-          - If underwater / flat: Close position to prevent full stop-out.
+          - If significantly in profit (>= 1.0R): Ratchet SL to a safe 1.2x ATR trailing buffer.
+          - If underwater or flat: Never panic-close at market; allow structural stop loss to govern risk.
         """
         of_data = getattr(ctx, "order_flow", {})
         if not of_data or not isinstance(of_data, dict):
@@ -929,21 +913,28 @@ class PositionMonitorEngine:
         if not is_adversarial:
             return False, None
 
-        is_in_profit = (pos.profit > 0.0) or ((c_price > pos.open_price) if pos.type == "BUY" else (c_price < pos.open_price))
+        is_in_profit = (c_price > pos.open_price) if pos.type == "BUY" else (c_price < pos.open_price)
 
         if is_in_profit:
-            # In profit -> ratchet SL to Bid/Ask +/- 0.15x ATR
+            # Ratchet SL aggressively to Bid/Ask +/- 0.15 ATR to lock profits before reversal
             if pos.type == "BUY":
-                bid_price = getattr(ctx, "bid", c_price)
-                cand_sl = round(bid_price - (0.15 * atr), digits)
-                return True, cand_sl
+                bid = getattr(ctx, "bid", c_price)
+                shield_sl = round(bid - (0.15 * atr), digits)
+                if shield_sl > pos.sl and shield_sl < c_price:
+                    return True, shield_sl
             else:
-                ask_price = getattr(ctx, "ask", c_price)
-                cand_sl = round(ask_price + (0.15 * atr), digits)
-                return True, cand_sl
+                ask = getattr(ctx, "ask", c_price)
+                shield_sl = round(ask + (0.15 * atr), digits)
+                if (pos.sl == 0 or shield_sl < pos.sl) and shield_sl > c_price:
+                    return True, shield_sl
         else:
-            # Underwater or flat -> close position
-            return True, "CLOSE"
+            # Underwater position facing aggressive counter-flow: emergency liquidation
+            # Only trigger if adverse movement is genuine (exceeds 0.15 * atr), preventing instant spread-based liquidations
+            adverse_dist = (pos.open_price - c_price) if pos.type == "BUY" else (c_price - pos.open_price)
+            if counter_trap and adverse_dist >= (0.15 * atr):
+                return True, "CLOSE"
+
+        return False, None
 
     def _get_context(self, symbol: str) -> Optional[MarketContext]:
         """Returns cached context or fetches fresh context if TTL expired."""
