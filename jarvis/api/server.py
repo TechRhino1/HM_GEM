@@ -266,7 +266,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 "/", "/index.html", "/stocks", "/stocks.html", "/screener",
                 "/india", "/india.html", "/india/stocks", "/nse", "/bse",
                 "/options", "/options.html", "/india/options", "/india-options", "/fno",
-                "/api/telemetry_state", "/api/telemetry", "/api/candles", "/api/rates",
+                "/api/telemetry_state", "/api/telemetry", "/api/state", "/api/candles", "/api/rates",
                 "/api/radar", "/api/market-status", "/api/news", "/api/history",
                 "/api/tunnel_info", "/api/diagnostics", "/api/pending_orders",
                 "/api/stream/telemetry", "/api/auth/me", "/api/auth/verify"
@@ -301,7 +301,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 from jarvis.india.india_service import INDIA_SERVICE
                 if not INDIA_SERVICE.handle_request(path, query, self):
                     self.send_error(404, f"India API {path} not found")
-            elif path in ("/api/telemetry_state", "/api/telemetry"):
+            elif path in ("/api/telemetry_state", "/api/telemetry", "/api/state"):
                 snap = self.state_manager.get_state_snapshot()
                 acc_dict = snap.get("account")
                 if not acc_dict or acc_dict.get("balance", 0) == 0:

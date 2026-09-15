@@ -101,8 +101,8 @@ _REGISTRY: Dict[str, SymbolSpec] = {
     ),
     "WTI": SymbolSpec(
         canonical="WTI", asset_class="COMMODITY",
-        contract_size=1000.0, pip_size=0.01, pip_value_per_lot=10.0,
-        typical_spread_pips=3.0, max_spread_pips=8.0,
+        contract_size=100.0, pip_size=0.01, pip_value_per_lot=1.0,
+        typical_spread_pips=3.0, max_spread_pips=6.0,
         typical_atr_pct=1.5, margin_pct=0.2, digits=2
     ),
     "ETHUSD": SymbolSpec(
@@ -170,7 +170,7 @@ _ALIAS_MAP: Dict[str, str] = {
     "FTSE100": "UK100", "FTSE": "UK100", "UK100.I": "UK100",
     "XAGUSD#": "XAGUSD", "XAGUSD.I#": "XAGUSD", "SILVER": "XAGUSD", "SILVER.i#": "XAGUSD",
     "SILVER.I#": "XAGUSD", "XAG": "XAGUSD",
-    "USOIL": "WTI", "OIL": "WTI", "CRUDE": "WTI", "USOIL.I#": "WTI", "OIL.I#": "WTI", "CL": "WTI",
+    "USOIL": "WTI", "OIL": "WTI", "CRUDE": "WTI", "USOIL.I#": "WTI", "OIL.I#": "WTI", "CL": "WTI", "OILCASH#": "WTI", "OILCASH": "WTI", "OILCASH.I#": "WTI",
     "USDCHF#": "USDCHF", "USDCHF.I#": "USDCHF",
     "NZDUSD#": "NZDUSD", "NZDUSD.I#": "NZDUSD",
     "EURJPY#": "EURJPY", "EURJPY.I#": "EURJPY",

@@ -29,6 +29,7 @@ from jarvis.learning.strategy_memory import StrategyRegimeMemory
 from jarvis.data.schemas import ExecutionMode
 from jarvis.data.symbol_registry import is_crypto
 from jarvis.data.symbol_registry import resolve as _resolve_sym
+from jarvis.intelligence.symbol_profile_config import get_symbol_profile_config
 from jarvis.risk.circuit_breaker import CircuitBreaker
 from jarvis.risk.drawdown import DrawdownGuard
 from jarvis.risk.account_tier import is_micro_account, get_max_lot_cap
@@ -335,12 +336,13 @@ class JarvisOrchestrator:
 
         positions = self.state_manager.positions
         _spec = _resolve_sym(symbol)
+        _p_cfg = get_symbol_profile_config(symbol)
         sym_info = {
             "name": symbol,
-            "trade_contract_size": _spec.contract_size,
-            "volume_min": 0.01,
+            "trade_contract_size": getattr(_p_cfg, "contract_size", _spec.contract_size),
+            "volume_min": getattr(_p_cfg, "min_volume", 0.01),
             "volume_max": 100.0,
-            "volume_step": 0.01
+            "volume_step": getattr(_p_cfg, "volume_step", 0.01)
         }
 
         # ── Hard Quality Gate: min model_confidence ────────────────────────
@@ -610,12 +612,13 @@ class JarvisOrchestrator:
                     account = self.state_manager.account or self.mt5_client.get_account_snapshot()
                     positions = self.state_manager.positions
                     _spec = _resolve_sym(sym)
+                    _p_cfg = get_symbol_profile_config(sym)
                     sym_info = {
                         "name": sym,
-                        "trade_contract_size": _spec.contract_size,
-                        "volume_min": 0.01,
+                        "trade_contract_size": getattr(_p_cfg, "contract_size", _spec.contract_size),
+                        "volume_min": getattr(_p_cfg, "min_volume", 0.01),
                         "volume_max": 100.0,
-                        "volume_step": 0.01
+                        "volume_step": getattr(_p_cfg, "volume_step", 0.01)
                     }
                     ctx = best_opportunity.context
                     cur_spread = ctx.volatility.current_spread_pips if ctx and hasattr(ctx, "volatility") else _spec.typical_spread_pips

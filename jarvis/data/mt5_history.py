@@ -115,7 +115,7 @@ _BROKER_FALLBACK = {
     "XAUUSD": "GOLD.i#", "XAGUSD": "SILVER.i#",
     "US30": "US30Cash#", "NAS100": "US100Cash#", "SPX500": "US500Cash#",
     "GER40": "GER40Cash#", "UK100": "UK100Cash#",
-    "USOIL": "OILCash#", "UKOIL": "BRENTCash#",
+    "USOIL": "OILCash#", "UKOIL": "BRENTCash#", "WTI": "OILCash#",
     "BTCUSD": "BTCUSD#", "ETHUSD": "ETHUSD#", "SOLUSD": "SOLUSD#",
 }
 

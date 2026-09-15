@@ -91,6 +91,7 @@ class LiveNewsEngine:
     
     FAIRECONOMY_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
     MYFXBOOK_URL = "https://www.myfxbook.com/rss/forex-economic-calendar-events"
+    FXSTREET_URL = "https://www.fxstreet.com/rss/news"
     
     COUNTRY_MAP = {
         "United States": "USD", "US": "USD", "Euro Area": "EUR", "Eurozone": "EUR", "Germany": "EUR",
@@ -99,12 +100,45 @@ class LiveNewsEngine:
         "Canada": "CAD", "Australia": "AUD", "New Zealand": "NZD", "China": "CNY"
     }
     
-    def __init__(self, cache_ttl_sec: float = 90.0):
+    def __init__(self, cache_ttl_sec: float = 120.0):
         self.cache_ttl_sec = cache_ttl_sec
         self._lock = threading.Lock()
         self._cached_news: List[Dict[str, Any]] = []
         self._last_fetch_time: float = 0.0
         self._ctx = ssl.create_default_context()
+        self._disk_cache_file = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "..", "data", "news_cache.json"
+        )
+        self._load_disk_cache()
+
+    def _load_disk_cache(self):
+        try:
+            if os.path.exists(self._disk_cache_file):
+                with open(self._disk_cache_file, "r", encoding="utf-8") as f:
+                    cache_payload = json.load(f)
+                saved_time = cache_payload.get("saved_at", 0)
+                # Use disk cache if under 2 hours old
+                if (time.time() - saved_time) < 7200 and cache_payload.get("events"):
+                    self._cached_news = cache_payload["events"]
+                    self._last_fetch_time = saved_time
+                    logger.info(f"Loaded {len(self._cached_news)} news events from disk cache.")
+        except Exception as e:
+            logger.debug(f"Could not load news disk cache: {e}")
+
+    def _save_disk_cache(self, events: List[Dict[str, Any]]):
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(self._disk_cache_file)), exist_ok=True)
+            serializable = []
+            for ev in events:
+                item = dict(ev)
+                if "event_dt" in item and isinstance(item["event_dt"], datetime):
+                    item["event_dt"] = item["event_dt"].isoformat()
+                serializable.append(item)
+            with open(self._disk_cache_file, "w", encoding="utf-8") as f:
+                json.dump({"saved_at": time.time(), "events": serializable}, f)
+        except Exception as e:
+            logger.debug(f"Could not write news disk cache: {e}")
 
     def get_news_calendar(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """Returns fresh macro economic events formatted in IST & UTC with 1 most recent on top."""
@@ -114,6 +148,8 @@ class LiveNewsEngine:
                 return self._organize_news_feed(self._cached_news)
 
         events = self._fetch_all_live_sources()
+        if not events and self._cached_news:
+            events = self._cached_news
         if not events:
             events = self._generate_dynamic_calendar()
 
@@ -121,26 +157,29 @@ class LiveNewsEngine:
             if events:
                 self._cached_news = events
                 self._last_fetch_time = time.time()
+                self._save_disk_cache(events)
             return self._organize_news_feed(self._cached_news or self._generate_dynamic_calendar())
 
     def _fetch_all_live_sources(self) -> List[Dict[str, Any]]:
-        """Fetches from FairEconomy and MyFxBook, merging and deduplicating."""
+        """Fetches from live sources with fallback to disk cache and RSS."""
         all_events = []
         
-        # 1. Primary: FairEconomy
+        # 1. Primary: FairEconomy with Rate-Limit protection
         fe_items = self._fetch_faireconomy_feed()
         if fe_items:
             all_events.extend(fe_items)
+        elif self._cached_news:
+            # Fallback to existing valid cache if FairEconomy rate-limited
+            all_events.extend(self._cached_news)
             
-        # 2. Secondary: MyFxBook
-        mfb_items = self._fetch_myfxbook_feed()
-        if mfb_items:
-            # Deduplicate with FairEconomy by title similarity & time
-            for m in mfb_items:
-                m_title = m.get("title", "").lower()
-                m_curr = m.get("currency", "")
-                if not any(e.get("currency") == m_curr and (m_title in e.get("title", "").lower() or e.get("title", "").lower() in m_title) for e in all_events):
-                    all_events.append(m)
+        # 2. Secondary: Live FXStreet RSS for breaking market events
+        fx_items = self._fetch_fxstreet_feed()
+        if fx_items:
+            for fx in fx_items:
+                f_title = fx.get("title", "").lower()
+                f_curr = fx.get("currency", "")
+                if not any(e.get("currency") == f_curr and (f_title in e.get("title", "").lower() or e.get("title", "").lower() in f_title) for e in all_events):
+                    all_events.append(fx)
 
         return all_events
 
@@ -267,6 +306,75 @@ class LiveNewsEngine:
             logger.debug(f"MyFxBook news fetch error: {e}")
             return []
 
+    def _fetch_fxstreet_feed(self) -> List[Dict[str, Any]]:
+        """Fetches breaking market headlines from FXStreet RSS."""
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "Accept": "application/rss+xml, application/xml, text/xml, */*"
+        }
+        try:
+            req = urllib.request.Request(self.FXSTREET_URL, headers=headers)
+            with urllib.request.urlopen(req, context=self._ctx, timeout=5) as resp:
+                xml_data = resp.read()
+                root = ET.fromstring(xml_data)
+                
+            parsed = []
+            now_dt = datetime.now(timezone.utc)
+            
+            for it in root.findall('.//item')[:15]:
+                title = it.findtext('title', '').strip()
+                if not title:
+                    continue
+                pub_date_str = it.findtext('pubDate', '').strip()
+                event_dt = now_dt
+                if pub_date_str:
+                    try:
+                        # RFC 822/2822: Tue, 15 Sep 2026 00:41:37 GMT
+                        from email.utils import parsedate_to_datetime
+                        event_dt = parsedate_to_datetime(pub_date_str)
+                        if event_dt.tzinfo is None:
+                            event_dt = event_dt.replace(tzinfo=timezone.utc)
+                    except Exception:
+                        event_dt = now_dt
+                
+                diff_seconds = (event_dt - now_dt).total_seconds()
+                t_lower = title.lower()
+                
+                # Identify currency from title
+                currency = "USD"
+                for c_name, code in self.COUNTRY_MAP.items():
+                    if c_name.lower() in t_lower:
+                        currency = code
+                        break
+                for curr_code in ["EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD", "CNY", "USD"]:
+                    if curr_code.lower() in t_lower or f" {curr_code} " in f" {title} ":
+                        currency = curr_code
+                        break
+                
+                impact = "MEDIUM"
+                if any(w in t_lower for w in ["fed", "rate hike", "rate cut", "cpi", "inflation", "nfp", "fomc", "ecb", "war", "tariffs", "boe"]):
+                    impact = "HIGH"
+                elif any(w in t_lower for w in ["pmi", "retail sales", "gdp", "yield"]):
+                    impact = "MEDIUM"
+                else:
+                    impact = "LOW"
+                
+                parsed.append({
+                    "title": title,
+                    "currency": currency,
+                    "impact": impact,
+                    "forecast": "—",
+                    "previous": "—",
+                    "actual": "Reported",
+                    "diff_seconds": diff_seconds,
+                    "event_dt": event_dt,
+                    "timestamp_iso": event_dt.isoformat()
+                })
+            return parsed
+        except Exception as e:
+            logger.debug(f"FXStreet news fetch error: {e}")
+            return []
+
     def _organize_news_feed(self, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Organizes news:
@@ -315,19 +423,21 @@ class LiveNewsEngine:
             # Affected pairs
             affected = []
             if currency == "USD":
-                affected = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD"]
+                affected = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF", "USDCAD", "NZDUSD", "BTCUSD", "ETHUSD", "SOLUSD", "US500", "NAS100", "US30"]
             elif currency == "EUR":
-                affected = ["EURUSD", "EURGBP", "EURJPY"]
+                affected = ["EURUSD", "EURGBP", "EURJPY", "GER40"]
             elif currency == "GBP":
-                affected = ["GBPUSD", "EURGBP", "GBPJPY"]
+                affected = ["GBPUSD", "EURGBP", "GBPJPY", "UK100"]
             elif currency == "JPY":
                 affected = ["USDJPY", "GBPJPY", "EURJPY"]
             elif currency == "AUD":
                 affected = ["AUDUSD", "AUDJPY"]
             elif currency == "CAD":
-                affected = ["USDCAD", "CADJPY"]
+                affected = ["USDCAD", "CADJPY", "WTI", "OILCASH"]
             else:
                 affected = [f"{currency}USD", "XAUUSD"]
+            if any(k in title.lower() for k in ["oil", "crude", "petroleum", "rig count", "energy", "opec"]):
+                affected.extend(["WTI", "OILCASH"])
 
             # Detailed Indicator Intelligence
             intel = self._generate_event_intel(title, currency, impact, act, fcst, prev)
@@ -556,15 +666,21 @@ class LiveNewsEngine:
 
         affected = []
         if currency == "USD":
-            affected = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD"]
+            affected = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF", "USDCAD", "NZDUSD", "BTCUSD", "ETHUSD", "SOLUSD", "US500", "NAS100", "US30"]
         elif currency == "EUR":
-            affected = ["EURUSD", "EURGBP", "EURJPY"]
+            affected = ["EURUSD", "EURGBP", "EURJPY", "GER40"]
         elif currency == "GBP":
-            affected = ["GBPUSD", "EURGBP", "GBPJPY"]
+            affected = ["GBPUSD", "EURGBP", "GBPJPY", "UK100"]
         elif currency == "JPY":
             affected = ["USDJPY", "GBPJPY", "EURJPY"]
+        elif currency == "AUD":
+            affected = ["AUDUSD", "AUDJPY"]
+        elif currency == "CAD":
+            affected = ["USDCAD", "CADJPY", "WTI", "OILCASH"]
         else:
             affected = [f"{currency}USD", "XAUUSD"]
+        if any(k in title.lower() for k in ["oil", "crude", "petroleum", "rig count", "energy", "opec"]):
+            affected.extend(["WTI", "OILCASH"])
 
         intel = self._generate_event_intel(title, currency, impact, act_display, fcst, prev)
 
@@ -614,12 +730,12 @@ class LiveNewsEngine:
         friday_base = (now_dt - timedelta(days=days_since_friday)).replace(second=0, microsecond=0)
 
         plan = [
-            # Real Historical Friday Releases
+            # Real Historical Friday Releases (Neutralized to prevent artificial shock bias in fallback)
             {
                 "event_dt": friday_base.replace(hour=13, minute=45),
                 "currency": "USD", "impact": "HIGH",
                 "event": "US S&P Global Composite Flash PMI",
-                "forecast": "51.4", "previous": "51.1", "actual": "51.8"
+                "forecast": "51.4", "previous": "51.1", "actual": "51.4"
             },
             {
                 "event_dt": friday_base.replace(hour=17, minute=0),
@@ -705,11 +821,18 @@ class LiveNewsEngine:
             return {"news_reversal_setup": False, "conviction_boost": 0.0, "reason": "No active sweep"}
 
         calendar = self.get_news_calendar()
+        try:
+            from jarvis.data.symbol_registry import resolve as resolve_sym
+            spec = resolve_sym(symbol)
+            canonical = spec.canonical.upper() if spec else symbol.upper().replace(".I#", "").replace("#", "")
+        except Exception:
+            canonical = symbol.upper().replace(".I#", "").replace("#", "")
+
         recent_news = [
             ev for ev in calendar 
             if ev.get("is_past") and ev.get("diff_seconds", 0) >= (-lookback_minutes * 60)
             and ev.get("impact") in ["HIGH", "MEDIUM"]
-            and any(p in symbol for p in ev.get("affected_pairs", []))
+            and (canonical in ev.get("affected_pairs", []) or any(p in canonical or p in symbol.upper() for p in ev.get("affected_pairs", [])))
         ]
 
         if not recent_news:

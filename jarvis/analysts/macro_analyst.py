@@ -69,6 +69,7 @@ class MacroAnalyst(BaseAnalyst):
 
         usd_bull_shock = False
         usd_bear_shock = False
+        active_shock_event = None
 
         for item in active_news:
             curr = item.get("currency", "")
@@ -76,19 +77,33 @@ class MacroAnalyst(BaseAnalyst):
             actual_str = str(item.get("actual", ""))
             fcst_str = str(item.get("forecast", ""))
             event_name = str(item.get("event", "")).lower()
+            diff_sec = item.get("diff_seconds")
 
             if curr == "USD" and impact == "HIGH":
-                # Skip events that haven't released yet
-                if not actual_str or actual_str in ("Upcoming", "—", "", "Pending"):
-                    risk_factors.append(f"⏳ Upcoming HIGH-impact USD event: {item.get('event')} — volatility spike imminent.")
+                # Upcoming event in next 15 minutes: volatility blackout / buffer warning
+                if diff_sec is not None and 0 < diff_sec <= 900:
+                    risk_factors.append(f"⏳ Upcoming HIGH-impact USD event: {item.get('event')} in {int(diff_sec/60)}m — volatility spike imminent.")
                     score -= 5.0
+                    continue
+
+                # Skip events that haven't released yet or are > 15m in the future
+                if not actual_str or actual_str in ("Upcoming", "—", "", "Pending") or (diff_sec is not None and diff_sec > 900):
+                    continue
+
+                # SHOCK FRESHNESS WINDOW: Only active within 45 minutes of release (-2700s <= diff_sec <= 0)
+                # Releases older than 45 minutes are fully digested / priced in by the interbank market
+                if diff_sec is not None and diff_sec < -2700:
                     continue
 
                 try:
                     act = _parse_metric(actual_str)
                     fcst = _parse_metric(fcst_str)
                     if act is None or fcst is None:
-                        raise ValueError("unparseable macro metric")
+                        continue
+
+                    diff_val = act - fcst
+                    if abs(diff_val) < 1e-5:
+                        continue  # In line with forecast — neutral outcome
 
                     # Detect inverse indicators where higher actual = weaker USD
                     is_inverse = any(kw in event_name for kw in [
@@ -96,54 +111,88 @@ class MacroAnalyst(BaseAnalyst):
                     ])
 
                     if is_inverse:
-                        # Higher actual = weaker economy = bearish USD
                         if act > fcst:
                             usd_bear_shock = True
-                            evidence.append(f"Macro Shock: Weaker USD (inverse) ({item.get('event')} {actual_str} vs {fcst_str} fcst).")
+                            active_shock_event = item.get("event")
+                            evidence.append(f"Active Macro Shock (Weaker USD): {item.get('event')} {actual_str} vs {fcst_str} fcst (Released {abs(int((diff_sec or 0)/60))}m ago).")
                         elif act < fcst:
                             usd_bull_shock = True
-                            evidence.append(f"Macro Shock: Stronger USD (inverse) ({item.get('event')} {actual_str} vs {fcst_str} fcst).")
+                            active_shock_event = item.get("event")
+                            evidence.append(f"Active Macro Shock (Stronger USD): {item.get('event')} {actual_str} vs {fcst_str} fcst (Released {abs(int((diff_sec or 0)/60))}m ago).")
                     else:
-                        # Standard indicators: higher actual = stronger USD
                         if act > fcst:
                             usd_bull_shock = True
-                            evidence.append(f"Macro Shock: Stronger USD Event ({item.get('event')} {actual_str} vs {fcst_str} fcst).")
+                            active_shock_event = item.get("event")
+                            evidence.append(f"Active Macro Shock (Stronger USD): {item.get('event')} {actual_str} vs {fcst_str} fcst (Released {abs(int((diff_sec or 0)/60))}m ago).")
                         elif act < fcst:
                             usd_bear_shock = True
-                            evidence.append(f"Macro Shock: Weaker USD Event ({item.get('event')} {actual_str} vs {fcst_str} fcst).")
+                            active_shock_event = item.get("event")
+                            evidence.append(f"Active Macro Shock (Weaker USD): {item.get('event')} {actual_str} vs {fcst_str} fcst (Released {abs(int((diff_sec or 0)/60))}m ago).")
                 except Exception:
-                    # Cannot parse — do NOT default to any shock direction
-                    risk_factors.append(f"⚠️ Unparseable USD event data: {item.get('event')}. No directional assumption made.")
                     continue
 
-        # 3. Directional Bias Mapping for Target Asset
-        if any(k in sym for k in ["XAU", "GOLD", "EUR", "GBP", "BTC"]):
-            if usd_bull_shock:
-                # Strong USD puts heavy downward pressure on Gold & Foreign Currencies
-                bias = "BEARISH"
-                score += 20.0
-                evidence.append(f"Macro Directional Forecast: Strong USD yield pressure triggers institutional SELL bias on {sym}.")
-            elif usd_bear_shock:
-                bias = "BULLISH"
-                score += 20.0
-                evidence.append(f"Macro Directional Forecast: Weak USD sentiment triggers institutional BUY impulse on {sym}.")
-        elif "USDJPY" in sym or "USDCAD" in sym:
-            if usd_bull_shock:
-                bias = "BULLISH"
-                score += 20.0
-                evidence.append(f"Macro Directional Forecast: Strong USD rally triggers BUY bias on {sym}.")
-            elif usd_bear_shock:
-                bias = "BEARISH"
-                score += 20.0
-                evidence.append(f"Macro Directional Forecast: Weaker USD triggers SELL bias on {sym}.")
+        # 3. Canonical Cross-Asset Directional Bias Mapping
+        try:
+            from jarvis.data.symbol_registry import resolve as resolve_sym
+            spec = resolve_sym(sym)
+            canonical = spec.canonical.upper() if spec else sym
+        except Exception:
+            canonical = sym
 
-        # 3b. Fallback: No macro shock — align with structure bias
-        # "No news is good news" — absence of macro headwinds supports trend continuation.
+        # USD-Inversed Assets: Gold, Major Currencies, Cryptos
+        usd_inverse_assets = {"XAUUSD", "EURUSD", "GBPUSD", "AUDUSD", "NZDUSD", "BTCUSD", "ETHUSD", "SOLUSD"}
+        # USD-Correlated Assets: USDJPY, USDCAD, USDCHF
+        usd_correlated_assets = {"USDJPY", "USDCAD", "USDCHF"}
+        # Equity Indices: Sensitive to Rate Shocks
+        equity_index_assets = {"US500", "NAS100", "US30", "GER40", "UK100"}
+
+        if canonical in usd_inverse_assets or any(k in sym for k in ["XAU", "GOLD", "EUR", "GBP", "AUD", "NZD", "BTC", "ETH", "SOL"]):
+            if usd_bull_shock:
+                bias = "BEARISH"
+                score += 15.0
+                evidence.append(f"Macro Directional Catalyst: Strong USD shock ({active_shock_event}) creates institutional headwind on {sym}.")
+            elif usd_bear_shock:
+                bias = "BULLISH"
+                score += 15.0
+                evidence.append(f"Macro Directional Catalyst: Weak USD shock ({active_shock_event}) triggers institutional BUY impulse on {sym}.")
+
+        elif canonical in usd_correlated_assets or any(k in sym for k in ["USDJPY", "USDCAD", "USDCHF"]):
+            if usd_bull_shock:
+                bias = "BULLISH"
+                score += 15.0
+                evidence.append(f"Macro Directional Catalyst: Strong USD yield rally ({active_shock_event}) drives institutional BUY bias on {sym}.")
+            elif usd_bear_shock:
+                bias = "BEARISH"
+                score += 15.0
+                evidence.append(f"Macro Directional Catalyst: Weak USD yields ({active_shock_event}) trigger institutional SELL flow on {sym}.")
+
+        elif canonical in equity_index_assets or any(k in sym for k in ["US500", "NAS100", "US30", "SPX", "NDX", "DJI", "GER40", "UK100"]):
+            if usd_bull_shock:
+                bias = "BEARISH"
+                score += 15.0
+                evidence.append(f"Macro Directional Catalyst: Hawkish yield shock ({active_shock_event}) pressures equity valuations on {sym}.")
+            elif usd_bear_shock:
+                bias = "BULLISH"
+                score += 15.0
+                evidence.append(f"Macro Directional Catalyst: Dovish monetary relief ({active_shock_event}) fuels equity risk-on impulse on {sym}.")
+
+        elif "WTI" in canonical or any(k in sym for k in ["OIL", "CRUDE", "WTI"]):
+            if usd_bull_shock:
+                bias = "BEARISH"
+                score += 10.0
+                evidence.append(f"Macro: Dollar strength pressures USD-denominated energy commodities ({sym}).")
+            elif usd_bear_shock:
+                bias = "BULLISH"
+                score += 10.0
+                evidence.append(f"Macro: Dollar softening supports energy commodity pricing ({sym}).")
+
+        # 3b. Fallback: No active macro shock — align with structural order flow
+        # "No news is good news" — absence of macro headwinds supports prevailing trend structure.
         if bias == "NEUTRAL" and not usd_bull_shock and not usd_bear_shock:
             structure_bias = context.structure.bias
             if structure_bias in ("BULLISH", "BEARISH"):
                 bias = structure_bias
-                evidence.append(f"Macro: No active macro headwinds — aligning with {structure_bias} structure bias.")
+                evidence.append(f"Macro: No active high-impact macro shock active — aligning with {structure_bias} market structure.")
 
         # 4. Check regime event risk / blackout window
         if regime.primary_regime.value == "EVENT_RISK":

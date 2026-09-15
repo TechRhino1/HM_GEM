@@ -36,7 +36,7 @@ TF_MAP = {
 class DataFeedEngine:
     _mt5_fetch_lock = threading.Lock()
 
-    def __init__(self, mt5_client: Any = None, timeout_sec: float = 3.0):
+    def __init__(self, mt5_client: Any = None, timeout_sec: float = 5.0):
         self.mt5_client = mt5_client
         self.timeout_sec = timeout_sec
         self._cache: Dict[str, Dict[str, Any]] = {}

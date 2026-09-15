@@ -74,6 +74,7 @@ data/metadata/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+data/*.json
 
 # Derived signal-scan cache (regenerate with tools/scan_signals.py)
 data/signals/
